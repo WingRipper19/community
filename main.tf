@@ -1,179 +1,76 @@
-# Declares AWS as the infrastructure provider [cite: 1]
+# Declares AWS as the infrastructure provider
 provider "aws" {
-  region = "us-east-2" # Sets the AWS region to Ohio [cite: 1]
+  region = "us-east-2" # Sets the AWS region to Ohio
 
-  # Defines tags that will be automatically applied to all supported resources [cite: 1]
+  # Defines tags that will be automatically applied to all supported resources
   default_tags {
     tags = {
-      hashicorp-learn = "aws-asg" # Assigns a tracking tag for this tutorial configuration [cite: 1]
+      hashicorp-learn = "aws-asg" # Assigns a tracking tag for this tutorial configuration
     }
   }
 }
 
-# Dynamically fetches a list of available AWS Availability Zones in us-east-2 [cite: 1]
+# Dynamically fetches a list of available AWS Availability Zones in us-east-2
 data "aws_availability_zones" "available" {
-  state = "available" # Filters the query to only return zones that are currently active [cite: 1]
+  state = "available" # Filters the query to only return zones that are currently active
 }
 
-# Calls a verified external registry module to provision a standardized network setup [cite: 1]
+# Calls a verified external registry module to provision a standardized network setup
 module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws" # The source path of the AWS VPC module on the Terraform Registry [cite: 1]
-  version = "2.77.0"                      # Locks the module to a specific version for architectural stability [cite: 1]
+  source  = "terraform-aws-modules/vpc/aws" # The source path of the AWS VPC module on the Terraform Registry
+  version = "2.77.0"                      # Locks the module to a specific version for architectural stability
 
-  name = "main-vpc" # Names the created VPC resource [cite: 1]
-  cidr = "10.0.0.0/16" # Defines the primary private IP range for the entire network [cite: 1]
+  name = "main-vpc" # Names the created VPC resource
+  cidr = "10.0.0.0/16" # Defines the primary private IP range for the entire network
 
-  azs                  = data.aws_availability_zones.available.names # Spreads the subnets across the active AZs fetched above [cite: 1]
-  public_subnets       = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"] # Allocates three distinct public IP ranges inside the AZs [cite: 1]
-  enable_dns_hostnames = true # Automatically assigns public DNS hostnames to instances running in this VPC [cite: 1]
-  enable_dns_support   = true # Enables the native AWS DNS resolution service for this VPC [cite: 1]
+  azs                  = data.aws_availability_zones.available.names # Spreads the subnets across the active AZs fetched above
+  public_subnets       = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"] # Allocates three distinct public IP ranges inside the AZs
+  enable_dns_hostnames = true # Automatically assigns public DNS hostnames to instances running in this VPC
+  enable_dns_support   = true # Enables the native AWS DNS resolution service for this VPC
 }
 
-# Dynamically searches for an official Amazon Machine Image (AMI) to use for the servers [cite: 1, 2]
+# Dynamically searches for an official Amazon Machine Image (AMI) to use for the servers
 data "aws_ami" "amazon_linux" {
-  most_recent = true # If multiple images match the filter, always grab the newest one [cite: 2]
-  owners      = ["amazon"]  # Restricts the search specifically to images published by Amazon [cite: 2]
+  most_recent = true # If multiple images match the filter, always grab the newest one
+  owners      = ["amazon"]  # Restricts the search specifically to images published by Amazon
 
-  # Filters the AMI catalog down to a specific Operating System type [cite: 2]
+  # Filters the AMI catalog down to a specific Operating System type
   filter {
-    name   = "name" # Filters based on the AMI name string [cite: 2]
-    values = ["amzn2-ami-hvm-*-x86_64-ebs"]  # Wildcard pattern to match 64-bit Amazon Linux 2 AMIs [cite: 2]
+    name   = "name" # Filters based on the AMI name string
+    values = ["amzn2-ami-hvm-*-x86_64-ebs"]  # Wildcard pattern to match 64-bit Amazon Linux 2 AMIs
   }
 }
 
-# Defines the legacy template configuration for spawning new EC2 instances [cite: 2]
+# Defines the legacy template configuration for spawning new EC2 instances
 resource "aws_launch_configuration" "terratutorial" {
-  name_prefix     = "learn-terraform-aws-asg-" # Prefixes the unique generated name for this configuration [cite: 2]
-  image_id        = data.aws_ami.amazon_linux.id  # Dynamically passes the ID of the Amazon Linux 2 AMI found above [cite: 2]
-  instance_type   = "t2.micro" # Specifies the hardware size (1 vCPU, 1 GB RAM—Eligible for Free Tier) [cite: 2]
+  name_prefix     = "learn-terraform-aws-asg-" # Prefixes the unique generated name for this configuration
+  image_id        = data.aws_ami.amazon_linux.id  # Dynamically passes the ID of the Amazon Linux 2 AMI found above
+  instance_type   = "t2.micro" # Specifies the hardware size (1 vCPU, 1 GB RAM—Eligible for Free Tier)
 }
 
-# Defines the rules and scaling boundaries for a cluster of self-healing EC2 instances [cite: 2, 3]
+# Defines the rules and scaling boundaries for a cluster of self-healing EC2 instances
 resource "aws_autoscaling_group" "terratutorial" {
-  name                 = "terratutorial" # The deployment name of the Auto Scaling Group [cite: 3]
-  min_size             = 1 # Absolute minimum number of EC2 instances that must be kept alive [cite: 3]
-  max_size             = 3 # Maximum limit of EC2 instances allowed during high-traffic spikes [cite: 3]
-  desired_capacity     = 1 # The base number of instances to spin up immediately on initial deployment [cite: 3]
-  launch_configuration = aws_launch_configuration.terratutorial.name # Instructs the group to build instances using the blueprint above [cite: 3]
-  vpc_zone_identifier  = module.vpc.public_subnets # Places the instances into the public subnets generated by the VPC module [cite: 3]
+  name                 = "terratutorial" # The deployment name of the Auto Scaling Group
+  min_size             = 1 # Absolute minimum number of EC2 instances that must be kept alive
+  max_size             = 3 # Maximum limit of EC2 instances allowed during high-traffic spikes
+  desired_capacity     = 1 # The base number of instances to spin up immediately on initial deployment
+  launch_configuration = aws_launch_configuration.terratutorial.name # Instructs the group to build instances using the blueprint above
+  vpc_zone_identifier  = module.vpc.public_subnets # Places the instances into the public subnets generated by the VPC module
 
-  health_check_type    = "ELB" # Uses the Load Balancer's target checks (instead of just EC2 pings) to decide if a server is dead [cite: 3]
+  health_check_type    = "ELB" # Uses the Load Balancer's target checks (instead of just EC2 pings) to decide if a server is dead
 
-  # Defines a resource tag that will be assigned to every EC2 instance spawned by this group [cite: 3]
+  # Defines a resource tag that will be assigned to every EC2 instance spawned by this group
   tag {
-    key                 = "Name" # The tag key [cite: 3]
-    value               = "Learn ASG - terratutorial" # The tag value [cite: 4]
-    propagate_at_launch = true # Evaluates to true so that instances inherit this tag automatically when scaled up [cite: 4]
+    key                 = "Name" # The tag key
+    value               = "Learn ASG - terratutorial" # The tag value
+    propagate_at_launch = true # Evaluates to true so that instances inherit this tag automatically when scaled up
   }
 }
 
-# Defines a policy that dictates exactly how the Auto Scaling Group should shrink [cite: 4]
+# Defines a policy that dictates exactly how the Auto Scaling Group should shrink
 resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "terratutorial-scale-down" # The policy name [cite: 4]
-  scaling_adjustment     = -1 # Tells the group to subtract exactly one instance when executed [cite: 4]
-  adjustment_type        = "ChangeInCapacity" # Specifies that the adjustment represents a flat number change [cite: 4]
-  cooldown               = 120 # Gives the group a 120-second rest period before it can scale down again [cite: 4]
-  autoscaling_group_name = aws_autoscaling_group.terratutorial.name # Binds this policy directly to our Auto Scaling Group [cite: 4]
-}
-
-# Sets up a CloudWatch monitor that keeps an eye on system load to trigger the scaling policy [cite: 4, 5]
-resource "aws_cloudwatch_metric_alarm" "scale_down" {
-  alarm_name          = "terratutorial-scale-down" # The identifier name for the metric alarm [cite: 5]
-  comparison_operator = "LessThanOrEqualToThreshold" # Sets the mathematical trigger condition [cite: 5]
-  evaluation_periods  = "2"                          # Requires the condition to be true for 2 consecutive cycles before alerting [cite: 5]
-  metric_name         = "CPUUtilization" # Monitors the processor usage metric of the instances [cite: 5]
-  namespace           = "AWS/EC2" # Points to the standard Amazon EC2 metric namespace [cite: 5]
-  period              = "120" # Measures the metric in 120-second (2-minute) intervals [cite: 5]
-  statistic           = "Average" # Looks at the mathematical average of CPU use across the instances [cite: 5]
-  threshold           = "10" # The metric trigger value; here, it triggers if average CPU usage is at or drops below 10% [cite: 6]
-
-  # Scopes the alarm down to evaluate only this specific cluster [cite: 6]
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.terratutorial.name # Feeds the ASG name to the monitoring scope [cite: 6]
-  }
-
-  alarm_description = "This metric monitors ec2 cpu utilization" # A human-readable description of what the alarm checks [cite: 6]
-  alarm_actions     = [aws_autoscaling_policy.scale_down.arn] # Dispatches an execution signal to the scale_down policy when triggered [cite: 6]
-}
-
-# Provisions a public-facing Application Load Balancer to distribute incoming web traffic [cite: 6]
-resource "aws_lb" "terratutorial" {
-  name               = "learn-asg-terratutorial-lb" # The AWS naming identifier for the load balancer [cite: 6]
-  internal           = false # Configures the load balancer to be internet-facing (public) [cite: 6]
-  load_balancer_type = "application" # Sets the type to Application (Layer 7 routing for HTTP/HTTPS) [cite: 6]
-  security_groups    = [aws_security_group.terratutorial_lb.id] # Attaches the firewall group that opens web ports to the internet [cite: 6]
-  subnets            = module.vpc.public_subnets # Binds the load balancer across the public subnets to capture incoming traffic [cite: 6]
-}
-
-# Configures the entry port on the Load Balancer to capture end-user requests [cite: 6, 7]
-resource "aws_lb_listener" "terratutorial" {
-  load_balancer_arn = aws_lb.terratutorial.arn # Links this listener directly to the load balancer created above [cite: 7]
-  port              = "80" # Listens on standard HTTP Port 80 [cite: 7]
-  protocol          = "HTTP" # Specifies the network transport protocol format [cite: 7]
-
-  # Defines what the load balancer should do with a request once it receives it [cite: 7]
-  default_action {
-    type             = "forward" # Instructs it to pass the traffic down the line [cite: 7]
-    target_group_arn = aws_lb_target_group.terratutorial.arn # Points to the specific destination pool where the servers live [cite: 7]
-  }
-}
-
-# Configures the routing destination pool where backend servers await traffic requests [cite: 7]
-resource "aws_lb_target_group" "terratutorial" {
-  name     = "learn-asg-terratutorial" # The system identifier name for the destination target group [cite: 7]
-  port     = 80 # The port the backend EC2 instances are listening on [cite: 7]
-  protocol = "HTTP" # The protocol format the backend instances expect [cite: 7]
-  vpc_id   = module.vpc.vpc_id # Binds the routing group within our active VPC network [cite: 7]
-}
-
-# Explicitly glues the dynamic Auto Scaling Group to the Load Balancer's target routing pool [cite: 7, 8]
-resource "aws_autoscaling_attachment" "terratutorial" {
-  autoscaling_group_name = aws_autoscaling_group.terratutorial.id # References the cluster that should receive traffic [cite: 8]
-  alb_target_group_arn   = aws_lb_target_group.terratutorial.arn # References the load balancer pool distributing it [cite: 8]
-}
-
-# Defines the network firewall rules protecting individual backend EC2 instances [cite: 8]
-resource "aws_security_group" "terratutorial_instance" {
-  name = "learn-asg-terratutorial-instance" # The name for this specific EC2 instance firewall [cite: 8]
-  
-  # Inbound traffic configuration [cite: 8]
-  ingress {
-    from_port       = 80 # Starts the permitted inbound port range at 80 [cite: 8]
-    to_port         = 80 # Ends the permitted inbound port range at 80 [cite: 8]
-    protocol        = "tcp" # Uses standard TCP protocol routing [cite: 8]
-    security_groups = [aws_security_group.terratutorial_lb.id] # CRITICAL: Only accepts traffic if it is forwarded through the ALB [cite: 8]
-  }
-
-  # Outbound traffic configuration [cite: 8]
-  egress {
-    from_port       = 0 # Opens the outbound range from port 0 [cite: 8]
-    to_port         = 0 # Closes the outbound range to port 0 [cite: 8]
-    protocol        = "-1" # "-1" is an internal shorthand code that completely permits all protocols [cite: 9]
-    cidr_blocks     = ["0.0.0.0/0"] # Permits the instances to send outgoing requests to anywhere on the web [cite: 9]
-  }
-
-  vpc_id = module.vpc.vpc_id # Attaches this security firewall to our active VPC [cite: 9]
-}
-
-# Defines the network firewall rules for the public-facing Load Balancer [cite: 9]
-resource "aws_security_group" "terratutorial_lb" {
-  name = "learn-asg-terratutorial-lb" # The identifier name for the load balancer firewall [cite: 9]
-  
-  # Inbound traffic configuration [cite: 9]
-  ingress {
-    from_port   = 80 # Starts the permitted incoming port range at 80 [cite: 9]
-    to_port     = 80 # Ends the permitted incoming port range at 80 [cite: 9]
-    protocol    = "tcp" # Uses standard TCP protocol routing [cite: 9]
-    cidr_blocks = ["0.0.0.0/0"] # Permits any user anywhere on the public internet to reach it [cite: 9]
-  }
-
-  # Outbound traffic configuration [cite: 9]
-  egress {
-    from_port   = 0 # Opens the outbound range from port 0 [cite: 9]
-    to_port     = 0 # Closes the outbound range to port 0 [cite: 9]
-    protocol    = "-1" # Completely permits all outbound protocols [cite: 9]
-    cidr_blocks = ["0.0.0.0/0"] # Allows the load balancer to send health checks or traffic to any outbound address [cite: 10]
-  }
-
-  vpc_id = module.vpc.vpc_id # Attaches this security firewall to our active VPC [cite: 10]
-}
+  name                   = "terratutorial-scale-down" # The policy name
+  scaling_adjustment     = -1 # Tells the group to subtract exactly one instance when executed
+  adjustment_type        = "ChangeInCapacity" # Specifies that the adjustment represents a flat number change
+  cooldown               = 120 # Gives the group a 120-second rest period before it can scale down again
+  autoscaling_group_name = aws_autoscaling_group.terratutorial.name # Binds
